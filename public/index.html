@@ -1,4 +1,4 @@
-mobile_html = '''<!DOCTYPE html>
+html_v2 = '''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -80,6 +80,7 @@ mobile_html = '''<!DOCTYPE html>
             display: flex;
             flex-direction: column;
             min-height: 0;
+            position: relative;
         }
         .video-container {
             flex: 1;
@@ -93,6 +94,16 @@ mobile_html = '''<!DOCTYPE html>
         #player { width: 100%; height: 100%; border: none; }
         .local-video { max-width: 100%; max-height: 100%; }
         
+        /* DIM OVERLAY - gets darker over time */
+        .dim-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0);
+            z-index: 50;
+            pointer-events: none;
+            transition: background 1s ease;
+        }
+        
         /* CONTROLS */
         .controls {
             padding: 12px;
@@ -101,6 +112,7 @@ mobile_html = '''<!DOCTYPE html>
             display: flex;
             flex-direction: column;
             gap: 10px;
+            z-index: 60;
         }
         .source-toggle {
             display: flex;
@@ -148,6 +160,7 @@ mobile_html = '''<!DOCTYPE html>
             border-top: 1px solid var(--emerald-dark);
             display: flex;
             flex-direction: column;
+            z-index: 60;
         }
         .chat-header {
             padding: 10px 15px;
@@ -196,29 +209,47 @@ mobile_html = '''<!DOCTYPE html>
             font-weight: bold;
         }
         
-        /* EMERALD GATE */
+        /* EMERALD GATE - TOP RIGHT */
         .emerald-gate-container {
             position: fixed;
-            bottom: 40vh;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
+            top: 20px;
+            right: 20px;
+            z-index: 200;
             display: none;
         }
         .emerald-gate {
-            width: 70px;
-            height: 70px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             background: radial-gradient(circle at 30% 30%, var(--emerald), var(--emerald-dark));
-            border: 3px solid rgba(255,255,255,0.4);
+            border: 2px solid rgba(255,255,255,0.4);
             cursor: pointer;
-            box-shadow: 0 0 40px var(--emerald-glow), inset 0 0 25px rgba(255,255,255,0.3);
+            box-shadow: 0 0 25px var(--emerald-glow), inset 0 0 15px rgba(255,255,255,0.3);
             animation: pulse 2s infinite;
+            opacity: 0.9;
         }
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.15); box-shadow: 0 0 60px var(--emerald-glow); }
+            50% { transform: scale(1.15); box-shadow: 0 0 40px var(--emerald-glow); }
         }
+        
+        /* SLEEP STATUS INDICATOR */
+        .sleep-status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 200;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--emerald-dark);
+            font-size: 0.8em;
+            color: var(--emerald);
+            opacity: 0;
+            transition: opacity 1s ease;
+            pointer-events: none;
+        }
+        .sleep-status.visible { opacity: 1; }
         
         /* SLEEP MODE */
         .sleep-overlay {
@@ -285,6 +316,7 @@ mobile_html = '''<!DOCTYPE html>
             <div class="video-container" id="videoContainer">
                 <div id="player"></div>
                 <video id="localPlayer" class="local-video hidden" controls></video>
+                <div class="dim-overlay" id="dimOverlay"></div>
             </div>
             
             <div class="controls">
@@ -314,6 +346,8 @@ mobile_html = '''<!DOCTYPE html>
         <div class="emerald-gate" onclick="pressEmeraldGate()" title="I'm still here"></div>
     </div>
     
+    <div class="sleep-status" id="sleepStatus">🌙 Getting sleepy...</div>
+    
     <div class="sleep-overlay" id="sleepOverlay">
         <div class="stars"></div>
         <div class="sleep-content">
@@ -329,4 +363,4 @@ mobile_html = '''<!DOCTYPE html>
 </body>
 </html>'''
 
-print(mobile_html)
+print(html_v2)
