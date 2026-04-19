@@ -1,10 +1,20 @@
-const socket = io();
+
+# Fix the JS bug and regenerate clean version
+
+js_v2_fixed = r'''const socket = io();
 let roomId = '';
 let currentSource = 'youtube';
 let syncEnabled = true;
-let volumeFadeInterval = null;
 let ytPlayer = null;
 
+// Sleep system variables
+let sleepStepInterval = null;
+let gateTimeout = null;
+let dimLevel = 0;
+let currentVolume = 1.0;
+let isAsleep = false;
+
+// YouTube API
 function onYouTubeIframeAPIReady() {
     ytPlayer = new YT.Player('player', {
         height: '100%',
@@ -35,6 +45,7 @@ function onPlayerStateChange(event) {
     }
 }
 
+// Room join
 function joinRoom() {
     roomId = document.getElementById('roomName').value.trim() || 'emerald-room';
     socket.emit('join-room', roomId);
@@ -46,9 +57,11 @@ function joinRoom() {
     tag.src = "https://www.youtube.com/iframe_api";
     document.head.appendChild(tag);
     
-    setTimeout(() => showEmeraldGate(), 10 * 1000); // 10s for testing, change to 20*60*1000 for 20min
+    // Start: 2 minutes of normal watching, then show gate
+    setTimeout(() => showEmeraldGate(), 2 * 60 * 1000);
 }
 
+// Source toggle
 function setSource(source) {
     currentSource = source;
     document.querySelectorAll('.source-toggle button').forEach(btn => btn.classList.remove('active'));
@@ -62,6 +75,7 @@ function setSource(source) {
     }
 }
 
+// Load video
 function loadVideo() {
     const url = document.getElementById('videoInput').value;
     if (!url) return;
@@ -75,11 +89,12 @@ function loadVideo() {
 }
 
 function extractVideoID(url) {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\\?v=|\\&v=)([^#\\&\\?]*).*/;
+    const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
 }
 
+// Local file
 function loadLocalFile(event) {
     const file = event.target.files[0];
     if (file) {
@@ -100,6 +115,7 @@ function emitLocalAction(action, time) {
     socket.emit('video-action', { action, time, source: 'local' });
 }
 
+// Chat
 function sendMessage() {
     const input = document.getElementById('chatInput');
     const msg = input.value.trim();
@@ -119,61 +135,119 @@ function addMessage(text, sender) {
     container.scrollTop = container.scrollHeight;
 }
 
+// ================= NEW EMERALD GATE SYSTEM =================
+
 function showEmeraldGate() {
+    if (isAsleep) return;
+    
     const gate = document.getElementById('emeraldGate');
     gate.style.display = 'block';
-    socket.emit('start-emerald-timer', 30000);
-    setTimeout(() => {
-        if (gate.style.display === 'block') {
-            gate.style.display = 'none';
-        }
-    }, 35000);
+    
+    // Start gradual sleep after 1 minute if not tapped
+    gateTimeout = setTimeout(() => {
+        startGradualSleep();
+    }, 60 * 1000); // 1 minute to respond
 }
 
 function pressEmeraldGate() {
-    socket.emit('emerald-check');
+    // Reset everything
+    clearTimeout(gateTimeout);
+    clearInterval(sleepStepInterval);
+    
     document.getElementById('emeraldGate').style.display = 'none';
-    setTimeout(() => showEmeraldGate(), 20 * 60 * 1000);
+    document.getElementById('sleepStatus').classList.remove('visible');
+    
+    // Restore brightness
+    dimLevel = 0;
+    document.getElementById('dimOverlay').style.background = 'rgba(0,0,0,0)';
+    
+    // Restore volume
+    currentVolume = 1.0;
+    setVolume(1.0);
+    
+    // Visual feedback
+    document.body.style.boxShadow = 'inset 0 0 50px rgba(80,200,120,0.4)';
+    setTimeout(() => {
+        document.body.style.boxShadow = 'none';
+    }, 600);
+    
+    // Schedule next gate in 15 minutes
+    setTimeout(() => showEmeraldGate(), 15 * 60 * 1000);
 }
 
-function triggerSleepMode() {
+function startGradualSleep() {
+    if (isAsleep) return;
+    
+    document.getElementById('sleepStatus').classList.add('visible');
+    
+    let steps = 0;
+    const maxSteps = 5; // 5 minutes total (1 min per step)
+    
+    sleepStepInterval = setInterval(() => {
+        steps++;
+        
+        // Increase dim by 15% each minute
+        dimLevel = Math.min(steps * 0.15, 0.85);
+        document.getElementById('dimOverlay').style.background = `rgba(0,0,0,${dimLevel})`;
+        
+        // Lower volume by 20% each minute
+        currentVolume = Math.max(1.0 - (steps * 0.2), 0.1);
+        setVolume(currentVolume);
+        
+        // Update status text
+        const status = document.getElementById('sleepStatus');
+        if (steps < 3) {
+            status.textContent = `🌙 Getting sleepy... ${steps}m`;
+        } else if (steps < 5) {
+            status.textContent = `🌙 Very sleepy... ${steps}m`;
+        } else {
+            status.textContent = `🌙 Almost asleep...`;
+        }
+        
+        // After 5 minutes, trigger full sleep mode
+        if (steps >= maxSteps) {
+            clearInterval(sleepStepInterval);
+            triggerFullSleep();
+        }
+    }, 60 * 1000); // Every 1 minute
+}
+
+function setVolume(vol) {
+    if (ytPlayer && ytPlayer.setVolume) {
+        ytPlayer.setVolume(vol * 100);
+    }
+    const localVideo = document.getElementById('localPlayer');
+    if (localVideo) localVideo.volume = vol;
+}
+
+function triggerFullSleep() {
+    isAsleep = true;
+    document.getElementById('sleepStatus').classList.remove('visible');
+    
     const overlay = document.getElementById('sleepOverlay');
     overlay.classList.add('active');
     
-    let volume = 1.0;
-    const fadeInterval = setInterval(() => {
-        volume -= 0.033;
-        if (volume <= 0) {
-            volume = 0;
-            clearInterval(fadeInterval);
-            if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
-            const localVideo = document.getElementById('localPlayer');
-            if (localVideo) localVideo.pause();
-        }
-        
-        if (ytPlayer && ytPlayer.setVolume) {
-            ytPlayer.setVolume(volume * 100);
-        }
-        const localVideo = document.getElementById('localPlayer');
-        if (localVideo) localVideo.volume = volume;
-    }, 1000);
-    
-    volumeFadeInterval = fadeInterval;
+    // Pause video
+    if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+    const localVideo = document.getElementById('localPlayer');
+    if (localVideo) localVideo.pause();
 }
 
 function wakeUp() {
-    const overlay = document.getElementById('sleepOverlay');
-    overlay.classList.remove('active');
+    isAsleep = false;
+    dimLevel = 0;
+    currentVolume = 1.0;
     
-    if (volumeFadeInterval) clearInterval(volumeFadeInterval);
-    if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(100);
+    document.getElementById('sleepOverlay').classList.remove('active');
+    document.getElementById('dimOverlay').style.background = 'rgba(0,0,0,0)';
+    setVolume(1.0);
+    
+    // Resume video
     const localVideo = document.getElementById('localPlayer');
-    if (localVideo) {
-        localVideo.volume = 1.0;
-        localVideo.play().catch(()=>{});
-    }
+    if (localVideo) localVideo.play().catch(()=>{});
 }
 
+// Socket listeners
 socket.on('room-state', (state) => {
     console.log('Room state:', state);
 });
@@ -213,7 +287,7 @@ socket.on('emerald-acknowledged', () => {
 });
 
 socket.on('sleep-mode', () => {
-    triggerSleepMode();
+    triggerFullSleep();
 });
 
 socket.on('wake-up', () => {
@@ -226,4 +300,6 @@ socket.on('user-joined', (count) => {
 
 socket.on('user-left', (count) => {
     addMessage(`Someone left (${count} online)`, 'System');
-});
+});'''
+
+print(js_v2_fixed)
