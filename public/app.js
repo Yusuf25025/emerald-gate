@@ -1,6 +1,3 @@
-
-# Fix the JS bug and regenerate clean version
-
 js_v2_fixed = r'''const socket = io();
 let roomId = '';
 let currentSource = 'youtube';
